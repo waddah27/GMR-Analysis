@@ -3,13 +3,13 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy import cos, sin
-from data_analysis_utils import get_lipschitz_criterion, get_norm_bound_threshold, get_smoothness_threshold
-from transformation_utils import transform_coordinates
+from utils.data_analysis_utils import get_lipschitz_criterion, get_norm_bound_threshold, get_smoothness_threshold
+from utils.transformation_utils import transform_coordinates
 from vic_controller_with_tank_energy_inside import VICController
 from sklearn.metrics import root_mean_squared_error as rmse
 from time import time
 
-from visualization_utils import VisualizerOnline, VisualizerOffline, VisualizerOfflineSameRanges
+from utils.visualization_utils import VisualizerOnline, VisualizerOffline, VisualizerOfflineSameRanges
 EXP_DATA_PATH = './experimental_data'
 # Load the data
 class MaterialMeta(Enum):
@@ -18,9 +18,9 @@ class MaterialMeta(Enum):
     cork =  'crck'
 
 class MaterialData:
-    PVC = np.load(f'./predicted_pose_twist_wrench_{MaterialMeta.PVC.value}.npy')
-    penoplex = np.load(f'./predicted_pose_twist_wrench_{MaterialMeta.penoplex.value}.npy')
-    cork = np.load(f'./predicted_pose_twist_wrench_{MaterialMeta.cork.value}.npy')
+    PVC = np.load(f'./data/predicted_pose_twist_wrench_{MaterialMeta.PVC.value}.npy')
+    penoplex = np.load(f'./data/predicted_pose_twist_wrench_{MaterialMeta.penoplex.value}.npy')
+    cork = np.load(f'./data/predicted_pose_twist_wrench_{MaterialMeta.cork.value}.npy')
 
 
 data_gmr = MaterialData.cork
