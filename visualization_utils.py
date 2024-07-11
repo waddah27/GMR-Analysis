@@ -257,7 +257,7 @@ class VisualizerOfflineSameRanges:
             ax.set_ylabel(stiff)
             ax.grid(True)
             # ax.set_xlim(0, 100)  # Example: Set consistent xlim for 'Step'
-            ax.set_ylim(0, 5500)  # Example: Set consistent ylim for stiffness
+            # ax.set_ylim(0, 5500)  # Example: Set consistent ylim for stiffness
             # ax.set_aspect(aspect='auto')  # Aspect ratio adjustment, if needed
 
         for ax, damp in zip(self.axs[3], self.damping):

@@ -8,6 +8,8 @@ class VICController:
         self.Xi_scaler = 5000
         self.k_min = np.array([10, 10, 10])
         self.k_max = np.array([5000, 5000, 5000])
+        self.k_init = 2000
+        self.xi_init = 0.7
         self.K_d = self.k_min
         self.D_min = np.array([0, 0, 0])
         self.D_max = np.array([self.Xi_scaler, self.Xi_scaler, self.Xi_scaler])
@@ -26,9 +28,19 @@ class VICController:
         # self.x_t = np.array([0.9, 0.9, 0.9])
         self.T_max = 3000 ##TODO: To be used as extra block
 
-        self.convergence_threshold = 1e-6  # Convergence threshold for objective function
-        self.max_iterations = 100  # Maximum number of optimization iterations
-        self.error_threshold = 1e-3  # Error threshold for variables
+        # Optimization variables
+        self.current_Force_error = []
+        self.Force_error = []
+        self.step_Force_errors = []
+        self.opt_res = None
+        self.fun_value = []
+        self.prev_kd = [[self.k_init, self.k_init, self.k_init]]
+
+        self.convergence_threshold = 1000e-3  # Convergence threshold for objective function
+        self.min_force_error_threshold = 1e-3  # Error threshold for variables
+        self.min_x_tilde_thresh = 1e-3  # Minimum x_tilde value threshold
+        self.violate_convergence_thresh_flags = []
+        self.violate_error_thresh_flags = []
 
     def objective(self, params, x_tilde, x_tilde_dot, F_d):
         k_d = np.diag(params[:3])
@@ -36,8 +48,8 @@ class VICController:
         xi_d = xi_d/self.Xi_scaler
         d_d = self.calculate_damping(xi_d, k_d)
         F_ext = np.dot(k_d, x_tilde) + np.dot(d_d, x_tilde_dot)
-
         norm_F = np.dot((F_ext - F_d).T, np.dot(self.Q, (F_ext - F_d)))
+        self.current_Force_error.append(norm_F)
         norm_k = np.dot((np.diag(k_d) - self.k_min).T, np.dot(self.R, (np.diag(k_d) - self.k_min)))
         smoothness_penalty = np.sum(np.diff(xi_d)**2)
         force_penalty = np.sum(np.maximum(0, F_ext - self.f_max) ** 2) + np.sum(np.maximum(0, self.f_min - F_ext) ** 2)
@@ -46,7 +58,7 @@ class VICController:
         passivity_penality, energy_penalty, self.E_t = self.tank_energy_penalty(params, x_tilde, x_tilde_dot, F_d)
         # self.E_tot.append(self.E_t)
 
-        return norm_F + norm_k + force_penalty + energy_penalty + passivity_penality #+ smoothness_penalty
+        return  norm_k + norm_F + force_penalty + energy_penalty + passivity_penality #+ smoothness_penalty
 
     def calculate_damping(self, xi_d, k_d):
         sqrt_k_d = np.sqrt(k_d)
@@ -69,10 +81,11 @@ class VICController:
         return passivity_penalty, energy_penality, E
 
     def optimize(self, x_tilde, x_tilde_dot, F_d):
-        xi_initial = 0.7 * self.Xi_scaler
-        initial_guess = [200, 200, 200, xi_initial, xi_initial, xi_initial]
-        bounds = [(self.k_min[i], self.k_max[i]) for i in range(3)] + [(self.D_min[i], self.D_max[i]) for i in range(3)]
+        xi_initial = self.xi_init * self.Xi_scaler
+        initial_guess = [self.k_init, self.k_init, self.k_init, xi_initial, xi_initial, xi_initial]
 
+        bounds = [(self.k_min[i], self.k_max[i]) for i in range(3)] + [(self.D_min[i], self.D_max[i]) for i in range(3)]
+        self.current_Force_error = [] # Reset the current force error list for each iteration
         result = minimize(
             self.objective,
             initial_guess,
@@ -81,11 +94,35 @@ class VICController:
             method='L-BFGS-B'
         )
 
-        self.K_d = result.x[:3]
-        self.D_d = result.x[3:6]/self.Xi_scaler
         self.E_tot.append(self.E_t)
+        self.opt_res = result
+        self.Force_error.append(self.current_Force_error)
+        self.step_Force_errors.append(self.current_Force_error[-1])
+        # self.fun_value.append(self.objective(result.x, x_tilde, x_tilde_dot, F_d))
+        # if self.step_Force_errors[-1] > self.convergence_threshold:
+        F_actual = self.calculate_force(x_tilde, x_tilde_dot)
+        self.fun_value.append(result.fun)
+        if result.fun > self.convergence_threshold and x_tilde.any() < self.min_x_tilde_thresh:
+            self.K_d = self.prev_kd[-1]
+            self.D_d = np.array(initial_guess[3:6])/self.Xi_scaler
+            self.set_flag(convergence_flag=True)
+
+        elif F_actual.any() < self.min_force_error_threshold:
+            self.D_d = np.array(initial_guess[3:6])/self.Xi_scaler
+            self.K_d = (F_d - np.dot(self.D_d, x_tilde_dot))/ x_tilde
+            self.set_flag(force_error_flag=True)
+
+        else:
+            self.K_d = result.x[:3]
+            self.D_d = result.x[3:6]/self.Xi_scaler
+            self.set_flag()
+
+        self.prev_kd.append(self.K_d)
 
         return self.K_d, self.D_d
+    def set_flag(self, force_error_flag=False, convergence_flag=False):
+        self.violate_error_thresh_flags.append(1 if force_error_flag else 0) # Set force_error_flag
+        self.violate_convergence_thresh_flags.append(1 if convergence_flag else 0) # Set convergence_flag
 
     def tank_dynamics(self, x_t, x_tilde_dot, K_v, D_d):
         return -K_v * np.sum(x_tilde_dot) - np.sum(D_d * x_tilde_dot)
