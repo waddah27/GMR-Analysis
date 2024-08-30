@@ -6,11 +6,11 @@ from scipy.optimize import minimize
 class VICController:
     def __init__(self, F_min: Optional[ndarray] = None, F_max: Optional[ndarray] = None):
         self.Xi_scaler = 5000
-        self.k_min = np.array([10, 10, 10])
+        self.k_min = np.array([100, 100, 100])
         self.k_max = np.array([5000, 5000, 5000])
         self.k_init = 2000
         self.xi_init = 0.7
-        self.K_d = self.k_min
+        self.K_d = self.k_min*20
         self.D_min = np.array([0, 0, 0])
         self.D_max = np.array([self.Xi_scaler, self.Xi_scaler, self.Xi_scaler])
         self.D_d = np.array([0.7, 0.7, 0.7]) * self.Xi_scaler
